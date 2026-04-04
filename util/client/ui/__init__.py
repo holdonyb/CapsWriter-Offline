@@ -33,6 +33,9 @@ from util.ui.rectify_menu_handler import on_add_rectify_record
 from util.ui.hotword_menu_handler import on_add_hotword
 from util.ui.context_menu_handler import on_edit_context
 
+# 5. 导出设置面板
+from util.client.ui.settings_window import open_settings
+
 __all__ = [
     'logger',
     'TipsDisplay',
@@ -45,4 +48,5 @@ __all__ = [
     'on_add_rectify_record',
     'on_add_hotword',
     'on_edit_context',
+    'open_settings',
 ]

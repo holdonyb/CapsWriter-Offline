@@ -176,6 +176,21 @@ class LLMHandler:
         # 1. 角色检测
         role_config, content = self.detect_role(text)
 
+        # 1.5 应用感知语调：根据当前窗口注入额外 system prompt
+        from config_client import ClientConfig as Config
+        if role_config and getattr(Config, 'app_aware_tone', True):
+            try:
+                from util.tools.window_detector import get_active_window_info
+                from util.llm.llm_context_builder import inject_app_context
+                from copy import copy
+                window_info = get_active_window_info()
+                new_sp = inject_app_context(role_config.system_prompt or '', window_info)
+                if new_sp != (role_config.system_prompt or ''):
+                    role_config = copy(role_config)
+                    role_config.system_prompt = new_sp
+            except Exception as _e:
+                logger.debug(f"应用感知语调注入失败（非致命）: {_e}")
+
         # 2. 如果不匹配任何需要处理的角色
         if not role_config:
 
@@ -189,14 +204,32 @@ class LLMHandler:
             return LLMResult(result=text, role_name=None, processed=False, 
                                 token_count=0, polish_time=0, input_text=text)
 
+        # 3. 润色模式：必须有选中文字
+        if role_config.name == '润色' and role_config.enable_read_selection:
+            selection_text = get_selected_text(role_config)
+            if not selection_text or not selection_text.strip():
+                try:
+                    from util.client.ui import toast
+                    toast("润色模式：请先选中要润色的文字", duration=3000, bg="#075077")
+                except Exception:
+                    pass
+                return LLMResult(
+                    result=None, role_name='润色', processed=False,
+                    token_count=0, polish_time=0, input_text=content
+                )
 
-        # 4. 根据输出模式分发处理
+        # 4. 润色模式等需替换选中内容时，强制使用粘贴
+        effective_paste = paste
+        if getattr(role_config, 'force_paste_for_replace', False):
+            effective_paste = True
+
+        # 5. 根据输出模式分发处理
         if role_config.output_mode == 'toast':
             result, token_count, gen_time = await handle_toast_mode(text, role_config, matched_hotwords, content)
-        else: # typing
-            result, token_count, gen_time = await handle_typing_mode(text, paste, matched_hotwords, role_config, content)
+        else:  # typing
+            result, token_count, gen_time = await handle_typing_mode(text, effective_paste, matched_hotwords, role_config, content)
 
-        # 5. 后置处理
+        # 6. 后置处理
         # 更新全局状态（即便是中断了，也记录已经输出的部分）
         if result:
             from util.client.state import get_state

@@ -64,6 +64,28 @@ def _setup_tray(state, base_dir):
             from util.llm.llm_clipboard import copy_to_clipboard
             copy_to_clipboard(text)
 
+    def restart_client():
+        from core_client import request_restart
+        request_restart()
+
+    def toggle_continuous():
+        if state.continuous_manager:
+            enabled = state.continuous_manager.toggle()
+            from util.client.ui import toast
+            if enabled:
+                toast("连续识别模式已开启", duration=2000, bg="#4caf50")
+            else:
+                toast("连续识别模式已关闭", duration=2000, bg="#ff9800")
+        else:
+            logger.warning("连续识别管理器未初始化")
+
+    def open_settings():
+        try:
+            from util.client.ui.settings_window import open_settings as _open
+            _open()
+        except ImportError as e:
+            logger.warning(f"无法导入设置面板: {e}")
+
     import os
     icon_path = os.path.join(base_dir, 'assets', 'icon.ico')
     enable_min_to_tray(
@@ -76,7 +98,10 @@ def _setup_tray(state, base_dir):
             ('✨ 添加热词', add_hotword),
             ('🛠️ 添加纠错', add_rectify),
             ('🧹 清除记忆', clear_memory),
+            ('🎙️ 连续识别', toggle_continuous),
+            ('⚙ 设置', open_settings),
             ('🔄 重启音频', restart_audio),
+            ('🔁 重启客户端', restart_client),
         ]
     )
     logger.info("托盘图标已启用")
@@ -147,6 +172,30 @@ def setup_client_components(base_dir):
         udp_controller = UDPController(shortcut_manager)
         state.udp_controller = udp_controller
         udp_controller.start()
+
+    # 8. 连续识别管理器
+    from util.client.audio.continuous_mode import ContinuousRecognitionManager
+    continuous_manager = ContinuousRecognitionManager(
+        state,
+        energy_threshold=Config.vad_energy_threshold,
+        silence_duration=Config.vad_silence_duration,
+        min_speech_duration=Config.vad_min_speech_duration,
+    )
+    state.continuous_manager = continuous_manager
+    logger.info("连续识别管理器已初始化")
+
+    # 注册连续识别切换热键（可选）
+    if Config.continuous_mode_hotkey:
+        try:
+            import keyboard
+            keyboard.add_hotkey(
+                Config.continuous_mode_hotkey,
+                lambda: continuous_manager.toggle(),
+                suppress=False,
+            )
+            logger.info(f"连续识别切换热键已注册: {Config.continuous_mode_hotkey}")
+        except Exception as e:
+            logger.warning(f"注册连续识别热键失败: {e}")
 
     # 9. 内存清理
     if system() == 'Windows':

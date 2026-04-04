@@ -38,9 +38,11 @@ class RoleConfig:
     enable_rectify: bool = False                  # 是否读取潜在纠错记录
     enable_read_selection: bool = False           # 是否读取鼠标所选文字（通过 Ctrl+C）
     selection_max_length: int = 1000              # 选中文字最大长度
+    allow_selection_same_as_last_output: bool = False  # 润色模式：允许选中内容与上次输出相同时仍处理（用于润色刚写的内容）
 
     # 输出配置
     output_mode: str = 'typing'                   # 输出方式: 'typing' 或 'toast' (即打字输出或弹窗输出)
+    force_paste_for_replace: bool = False         # 润色模式：强制使用粘贴以替换选中文字
 
     # Toast 弹窗配置
     toast_initial_width: float = 0.5              # Toast 窗口初始宽度（0.5 = 50% 屏幕宽度）

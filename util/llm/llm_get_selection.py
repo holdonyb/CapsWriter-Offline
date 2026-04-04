@@ -9,10 +9,10 @@ LLM 获取选中文字功能
 5. 判断内容是否变化，返回选中的文字
 """
 import time
-import pyclip
 import keyboard
 from . import logger
 from .llm_clipboard import safe_paste
+from util.client.clipboard import backup_clipboard_state, restore_clipboard_state
 from util.client.state import get_state
 state = get_state()
 
@@ -42,6 +42,7 @@ def get_selected_text(role_config) -> str:
     try:
         # 保存当前剪贴板内容
         original_clipboard = safe_paste()
+        clipboard_state = backup_clipboard_state()
 
         # 模拟 Ctrl+C 复制选中的文字
         keyboard.press_and_release('ctrl+c')
@@ -53,10 +54,13 @@ def get_selected_text(role_config) -> str:
         selected_text = safe_paste()
 
         # 还原原来的剪贴板内容
-        pyclip.copy(original_clipboard)
+        restore_clipboard_state(clipboard_state)
 
         # 如果内容没有变化，说明没有选中文字，返回空字符串
-        if selected_text == original_clipboard or selected_text == state.last_output_text:
+        if selected_text == original_clipboard:
+            return ""
+        # 若选中内容与上次输出相同，通常不再加入上下文；但润色模式需允许（用户要润色刚写的内容）
+        if selected_text == state.last_output_text and not getattr(role_config, 'allow_selection_same_as_last_output', False):
             return ""
 
         # 检查长度限制

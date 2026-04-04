@@ -17,8 +17,13 @@ import pyclip
 from pynput import keyboard as pynput_keyboard
 
 from config_client import ClientConfig as Config
+from util.client.clipboard import backup_clipboard_state, restore_clipboard_state
+from util.tools.window_detector import get_active_window_info
 from . import logger
 
+
+SEND_TOKEN = '[[CW_SEND]]'
+NEWLINE_TOKEN = '[[CW_NEWLINE]]'
 
 
 class TextOutput:
@@ -75,32 +80,32 @@ class TextOutput:
         """
         logger.debug(f"使用粘贴方式输出文本，长度: {len(text)}")
         
-        # 保存剪贴板
-        try:
-            temp = pyclip.paste().decode('utf-8')
-        except Exception:
-            temp = ''
+        # 保存剪贴板（尽可能保留图片/富文本等格式）
+        temp = backup_clipboard_state() if Config.restore_clip else None
         
-        # 复制结果
-        pyclip.copy(text)
-        
-        # 粘贴结果（使用 pynput 模拟 Ctrl+V）
+        # 粘贴结果（使用 pynput 模拟 Ctrl+V / Enter / Ctrl+Enter）
         controller = pynput_keyboard.Controller()
-        if platform.system() == 'Darwin':
-            # macOS: Command+V
-            with controller.pressed(pynput_keyboard.Key.cmd):
-                controller.tap('v')
-        else:
-            # Windows/Linux: Ctrl+V
-            with controller.pressed(pynput_keyboard.Key.ctrl):
-                controller.tap('v')
-        
-        logger.debug("已发送粘贴命令 (Ctrl+V)")
+        is_wechat = self._is_wechat_window()
+        for kind, content in self._iter_output_actions(text):
+            if kind == 'text' and content:
+                pyclip.copy(content)
+                if platform.system() == 'Darwin':
+                    with controller.pressed(pynput_keyboard.Key.cmd):
+                        controller.tap('v')
+                else:
+                    with controller.pressed(pynput_keyboard.Key.ctrl):
+                        controller.tap('v')
+            elif kind == 'send':
+                controller.tap(pynput_keyboard.Key.enter)
+            elif kind == 'newline':
+                self._tap_newline(controller, is_wechat)
+
+        logger.debug("已发送粘贴/发送/换行命令")
         
         # 还原剪贴板
-        if Config.restore_clip:
+        if Config.restore_clip and temp is not None:
             await asyncio.sleep(0.1)
-            pyclip.copy(temp)
+            restore_clipboard_state(temp)
             logger.debug("剪贴板已恢复")
     
     def _type_text(self, text: str) -> None:
@@ -114,4 +119,58 @@ class TextOutput:
             text: 要输出的文本
         """
         logger.debug(f"使用打字方式输出文本，长度: {len(text)}")
-        keyboard.write(text)
+        is_wechat = self._is_wechat_window()
+        for kind, content in self._iter_output_actions(text):
+            if kind == 'text' and content:
+                keyboard.write(content)
+            elif kind == 'send':
+                keyboard.press_and_release('enter')
+            elif kind == 'newline':
+                if is_wechat:
+                    keyboard.press_and_release('ctrl+enter')
+                else:
+                    keyboard.press_and_release('enter')
+
+    @staticmethod
+    def _is_wechat_window() -> bool:
+        """检测当前前台是否微信窗口。"""
+        info = get_active_window_info() or {}
+        title = (info.get('title') or '').lower()
+        process_name = (info.get('process_name') or '').lower()
+        app_name = (info.get('app_name') or '').lower()
+        combined = f"{title} {process_name} {app_name}"
+        return any(k in combined for k in ['wechat', 'weixin', '微信'])
+
+    @staticmethod
+    def _iter_output_actions(text: str) -> list[tuple[str, str]]:
+        """
+        将输出文本解析成动作序列：
+        - ('text', '普通文本')
+        - ('send', '')
+        - ('newline', '')
+        """
+        # 兼容历史规则：将 '\n' 视作 send
+        normalized = text.replace('\r\n', '\n').replace('\r', '\n')
+        normalized = normalized.replace('\n', SEND_TOKEN)
+        pattern = f"({re.escape(SEND_TOKEN)}|{re.escape(NEWLINE_TOKEN)})"
+        chunks = re.split(pattern, normalized)
+        actions: list[tuple[str, str]] = []
+        for chunk in chunks:
+            if not chunk:
+                continue
+            if chunk == SEND_TOKEN:
+                actions.append(('send', ''))
+            elif chunk == NEWLINE_TOKEN:
+                actions.append(('newline', ''))
+            else:
+                actions.append(('text', chunk))
+        return actions
+
+    @staticmethod
+    def _tap_newline(controller: pynput_keyboard.Controller, is_wechat: bool) -> None:
+        """模拟“换行”动作：微信中使用 Ctrl+Enter，其他应用使用 Enter。"""
+        if is_wechat:
+            with controller.pressed(pynput_keyboard.Key.ctrl):
+                controller.tap(pynput_keyboard.Key.enter)
+        else:
+            controller.tap(pynput_keyboard.Key.enter)

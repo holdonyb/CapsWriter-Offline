@@ -13,7 +13,7 @@ import socket
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Dict, Any
+from typing import TYPE_CHECKING, Optional, Dict, Any, List
 
 if TYPE_CHECKING:
     import sounddevice as sd
@@ -75,6 +75,12 @@ class ClientState:
     
     # 最近一次输出内容（如果是 LLM 润色，则是润色结果；否则是原始识别结果）
     last_output_text: Optional[str] = None
+    # 输出历史（按时间顺序），用于”润色前文/最近N次输入”命令
+    output_history: List[str] = field(default_factory=list)
+
+    # 连续识别模式
+    continuous_mode: bool = False
+    continuous_manager: Any = None
     
     def initialize(self) -> None:
         """
@@ -191,9 +197,18 @@ class ClientState:
             text: 输出文本内容
         """
         from config_client import ClientConfig as Config
+
+        # 空文本不更新状态，避免 /sil 等把最近有效输出覆盖掉
+        if not text:
+            return
         
         # 更新状态
         self.last_output_text = text
+        if text:
+            self.output_history.append(text)
+            # 限制历史长度，防止无限增长
+            if len(self.output_history) > 100:
+                self.output_history = self.output_history[-100:]
         
         # UDP 广播到配置的目标地址（如果启用）
         if Config.udp_broadcast and Config.udp_broadcast_targets:
@@ -214,9 +229,9 @@ _global_state: Optional[ClientState] = None
 def get_state() -> ClientState:
     """
     获取全局客户端状态实例
-    
+
     如果尚未初始化，则创建新实例。
-    
+
     Returns:
         ClientState 实例
     """
@@ -225,3 +240,10 @@ def get_state() -> ClientState:
         _global_state = ClientState()
         logger.debug("创建全局 ClientState 实例")
     return _global_state
+
+
+def reset_state():
+    """重置全局状态（用于客户端热重启）"""
+    global _global_state
+    _global_state = None
+    logger.debug("全局 ClientState 已重置")

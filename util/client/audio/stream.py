@@ -64,15 +64,25 @@ class AudioStreamManager:
     ) -> None:
         """
         音频数据回调函数
-        
+
         当音频流接收到新数据时调用，将数据放入异步队列中。
+        连续识别模式下，将音频喂给 VAD 进行自动分段。
         """
-        # 只在录音状态时处理数据
+        # 连续识别模式：将音频喂给 ContinuousRecognitionManager
+        if self.state.continuous_mode and self.state.continuous_manager:
+            self.state.continuous_manager.feed_audio(indata.copy(), time.time())
+            # 如果连续模式管理器正在驱动录音，数据已在 feed_audio 中处理
+            # 如果热键也在录音（_active=False but state.recording=True），
+            # 仍然需要走下面的原有逻辑
+            if self.state.continuous_manager._active:
+                return
+
+        # 只在录音状态时处理数据（热键模式）
         if not self.state.recording:
             return
-        
+
         import asyncio
-        
+
         # 将数据放入队列
         if self.state.loop and self.state.queue_in:
             asyncio.run_coroutine_threadsafe(

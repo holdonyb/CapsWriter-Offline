@@ -188,5 +188,15 @@ class LifecycleManager:
     def is_shutting_down(self) -> bool:
         return self._is_shutting_down
 
+    def reset(self):
+        """重置生命周期状态，允许重新启动（用于客户端热重启）"""
+        self._is_shutting_down = False
+        self._shutdown_event = None
+        self._cleanup_callbacks.clear()
+        self._loop = None
+        self._cleanup_done = False
+        self._last_sigint_time = 0.0
+        self.logger.debug("LifecycleManager 已重置")
+
 # 全局实例
 lifecycle = LifecycleManager()

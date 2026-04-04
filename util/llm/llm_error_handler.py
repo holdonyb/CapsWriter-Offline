@@ -66,7 +66,7 @@ def should_fallback_to_original(error: Exception) -> bool:
     return True
 
 
-def show_error_notification(error: Exception, role_name: str = "LLM"):
+def show_error_notification(error: Exception, role_name: str = "LLM", error_context: str = ""):
     """
     显示错误通知（Toast 或控制台）
 
@@ -75,19 +75,21 @@ def show_error_notification(error: Exception, role_name: str = "LLM"):
         role_name: 角色名称
     """
     user_msg = get_user_friendly_message(error)
+    context_suffix = f" | {error_context}" if error_context else ""
 
     # 记录日志
-    logger.warning(f"[{role_name}] {user_msg} - {error}")
+    logger.warning(f"[{role_name}] {user_msg}{context_suffix} - {error}")
 
     # 尝试显示 Toast 通知
     try:
         from util.ui.toast import ToastMessageManager, ToastMessage
 
         toast_manager = ToastMessageManager()
+        detail_line = f"\n{error_context}" if error_context else ""
 
         # 错误提示使用红色背景，更大的尺寸
         msg = ToastMessage(
-            text=f"❌ {role_name}: {user_msg}",
+            text=f"❌ {role_name}: {user_msg}{detail_line}",
             font_size=16,           # 增大字体
             bg='#8B0000',           # 深红色
             fg='white',
@@ -98,7 +100,6 @@ def show_error_notification(error: Exception, role_name: str = "LLM"):
             window_type='text'
         )
         toast_manager.add_message(msg)
-        toast_manager.finish_last_toast()  # 自动销毁
 
     except Exception as e:
         # Toast 显示失败，回退到控制台
@@ -106,7 +107,7 @@ def show_error_notification(error: Exception, role_name: str = "LLM"):
 
 
 def handle_llm_error(error: Exception, original_text: str, role_name: str = "LLM",
-                     fallback_text: Optional[str] = None) -> Tuple[str, bool]:
+                     fallback_text: Optional[str] = None, error_context: str = "") -> Tuple[str, bool]:
     """
     统一的 LLM 错误处理入口
 
@@ -123,9 +124,10 @@ def handle_llm_error(error: Exception, original_text: str, role_name: str = "LLM
     if should_fallback_to_original(error):
         # 降级策略：使用原文本或 fallback_text
         result = fallback_text if fallback_text is not None else original_text
-        logger.info(f"[{role_name}] 处理失败，降级到原文本: {error}")
+        context_suffix = f" | {error_context}" if error_context else ""
+        logger.info(f"[{role_name}] 处理失败，降级到原文本{context_suffix}: {error}")
         return (result, False)
     else:
         # 非降级策略：显示错误通知，返回空字符串
-        show_error_notification(error, role_name)
+        show_error_notification(error, role_name, error_context)
         return ("", False)

@@ -3,7 +3,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 # 版本信息
-__version__ = '2.5-alpha'
+__version__ = '2.5'
 
 # 项目根目录
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -53,10 +53,20 @@ class ClientConfig:
     hot_rectify = 0.6           # 纠错历史 RAG 匹配阈值（低阈值，用于 LLM 上下文）
     hot_rule = True             # 是否启用自定义规则替换（基于正则表达式）
 
+    # 应用感知语调（LLM 根据当前窗口调整输出风格）
+    app_aware_tone = True       # 是否将当前活跃应用名称传给 LLM，让模型自行调整语调
+
     llm_enabled = True          # 是否启用 LLM 润色功能，需要配置 LLM/ 目录下的角色文件
     llm_stop_key = 'esc'        # 中断 LLM 输出的快捷键
 
+    # 连续识别模式（VAD 自动分段）
+    continuous_mode_hotkey = ''       # 切换热键（空=仅语音/托盘控制）
+    vad_energy_threshold = 0.015     # RMS 能量阈值
+    vad_silence_duration = 1.5       # 静音多久判定段结束（秒）
+    vad_min_speech_duration = 0.3    # 最短语音时长（防噪音误触）
+
     enable_tray = True          # 客户端默认启用托盘图标功能
+    auto_start = False          # 是否开机自动启动
 
     # 日志配置
     log_level = 'INFO'          # 日志级别：'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'
@@ -126,6 +136,14 @@ r"""
 示例配置：
   {'key': 'caps_lock', 'type': 'keyboard', 'suppress': False, 'hold_mode': True, 'enabled': True}, 
   {'key': 'f12', 'type': 'keyboard', 'suppress': True, 'hold_mode': True, 'enabled': True}, 
-  {'key': 'x2', 'type': 'mouse', 'suppress': True, 'hold_mode': True, 'enabled': True}, 
+  {'key': 'x2', 'type': 'mouse', 'suppress': True, 'hold_mode': True, 'enabled': True},
 """
+
+# ==================== Override 加载 ====================
+# 如果存在 config_override.json，覆盖 ClientConfig 对应字段
+try:
+    from util.client.ui.config_editor import apply_overrides_to_config
+    apply_overrides_to_config()
+except Exception:
+    pass
 

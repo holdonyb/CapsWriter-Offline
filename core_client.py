@@ -29,7 +29,10 @@ from util.common.lifecycle import lifecycle
 from util.client.cleanup import cleanup_client_resources, request_exit_from_tray
 
 # 确保根目录位置正确，用相对路径加载模型
-BASE_DIR = os.path.dirname(__file__)
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 os.chdir(BASE_DIR)
 
 # 确保终端能使用 ANSI 控制字符
@@ -43,6 +46,7 @@ logger = setup_logger('client', level=Config.log_level)
 # _shortcut_handler and _stream_manager are now attributes of _state
 # _processor is now an attribute of _state
 _main_task = None  # 主任务引用
+_restart_requested = False  # 重启标志
 
 
 def _check_macos_permissions() -> None:
@@ -180,28 +184,47 @@ async def main_file(files: List[Path]) -> None:
     input('\n按回车退出\n')
 
 
+def request_restart():
+    """请求重启客户端（供语音命令调用）"""
+    global _restart_requested
+    _restart_requested = True
+    lifecycle.request_shutdown(reason="Restart requested")
+
+
 def init_mic() -> None:
     """初始化并运行麦克风模式"""
+    global _restart_requested
     from util.client.state import console
 
-    # 注册清理函数
-    lifecycle.register_on_shutdown(cleanup_client_resources)
+    while True:
+        _restart_requested = False
 
-    try:
-        asyncio.run(main_mic())
-        lifecycle.cleanup() # 正常退出清理
-    except KeyboardInterrupt:
-        # 有了 lifecycle，通常这一步不会被触发，除非 signal handler 没生效
-        # 或者在非 async 阶段被中断
-        logger.info("收到停止信号...")
-        lifecycle.cleanup()
-    except asyncio.CancelledError:
-        logger.info("任务已取消...")
-        lifecycle.cleanup()
-    except Exception as e:
-        logger.error(f"运行时错误: {e}", exc_info=True)
-        lifecycle.cleanup()
-        raise
+        # 注册清理函数
+        lifecycle.register_on_shutdown(cleanup_client_resources)
+
+        try:
+            asyncio.run(main_mic())
+            lifecycle.cleanup()  # 正常退出清理
+        except KeyboardInterrupt:
+            logger.info("收到停止信号...")
+            lifecycle.cleanup()
+        except asyncio.CancelledError:
+            logger.info("任务已取消...")
+            lifecycle.cleanup()
+        except Exception as e:
+            logger.error(f"运行时错误: {e}", exc_info=True)
+            lifecycle.cleanup()
+            raise
+
+        if not _restart_requested:
+            break
+
+        # 重启：重置 lifecycle 状态
+        console.print('\n[bold cyan]正在重启客户端...\n')
+        logger.info("客户端重启中...")
+        lifecycle.reset()
+        from util.client.state import reset_state
+        reset_state()
 
 
 def init_file(files: List[Path]) -> None:

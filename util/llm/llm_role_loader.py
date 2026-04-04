@@ -55,6 +55,13 @@ class RoleLoader:
         self.roles_registry.clear()
         errors = []
 
+        # 加载 LLM override
+        try:
+            from util.client.ui.config_editor import load_role_overrides
+            role_overrides = load_role_overrides()
+        except Exception:
+            role_overrides = {}
+
         for file_path in sorted(self.llm_dir.glob('*.py')):
             if file_path.name == '__init__.py':
                 continue
@@ -89,6 +96,15 @@ class RoleLoader:
                     'error': type(e).__name__,
                     'details': str(e)
                 })
+
+        # 应用 llm_override.json 中的覆盖配置
+        for role_name, role_config in self.roles_registry.items():
+            stem = role_config.module_name.replace('LLM.', '') if role_config.module_name else ''
+            overrides_for_role = role_overrides.get(stem, {})
+            if overrides_for_role:
+                for field_name, value in overrides_for_role.items():
+                    if hasattr(role_config, field_name):
+                        setattr(role_config, field_name, value)
 
         return errors
 

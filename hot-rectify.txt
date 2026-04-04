@@ -9,3 +9,7 @@
 Do you know cloud code? It is used for writing code
 Do you know Claude Code? It is used for writing code
 ---
+
+cloud code
+claude code
+---

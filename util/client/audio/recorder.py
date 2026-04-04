@@ -97,16 +97,28 @@ class AudioRecorder:
             # 生成唯一任务 ID
             self.task_id = str(uuid.uuid1())
             logger.debug(f"创建录音任务，任务ID: {self.task_id}")
-            
+
             self._start_time = 0.0
             self._duration = 0.0
             self._cache = []
-            
+
+            # 清空队列中可能遗留的旧数据（防止 buffer 积压导致结果延迟一次）
+            drained = 0
+            while not self.state.queue_in.empty():
+                try:
+                    self.state.queue_in.get_nowait()
+                    self.state.queue_in.task_done()
+                    drained += 1
+                except asyncio.QueueEmpty:
+                    break
+            if drained:
+                logger.debug(f"录音开始：已清空队列中 {drained} 条残留数据")
+
             # 音频文件管理
             file_path = None
             if Config.save_audio:
                 self._file_manager = AudioFileManager()
-            
+
             # 从队列读取数据
             while task := await self.state.queue_in.get():
                 self.state.queue_in.task_done()

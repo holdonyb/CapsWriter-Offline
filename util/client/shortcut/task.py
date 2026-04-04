@@ -83,6 +83,13 @@ class ShortcutTask:
         # 打印动画：正在录音
         self._status.start()
 
+        # 录音指示器
+        try:
+            from util.client.ui.recording_indicator import show_recording
+            show_recording()
+        except Exception:
+            pass
+
         # 启动识别任务
         recorder = self._get_recorder()
         self.task = asyncio.run_coroutine_threadsafe(
@@ -98,6 +105,13 @@ class ShortcutTask:
         self.state.stop_recording()
         self._status.stop()
 
+        # 录音指示器：隐藏
+        try:
+            from util.client.ui.recording_indicator import hide_recording
+            hide_recording()
+        except Exception:
+            pass
+
         self.task.cancel()
         self.task = None
 
@@ -108,6 +122,13 @@ class ShortcutTask:
         self.is_recording = False
         self.state.stop_recording()
         self._status.stop()
+
+        # 录音指示器：显示"识别中..."过渡状态（识别结果由 result_processor 通知）
+        try:
+            from util.client.ui.recording_indicator import show_result
+            show_result('识别中…')
+        except Exception:
+            pass
 
         asyncio.run_coroutine_threadsafe(
             self.state.queue_in.put({
