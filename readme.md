@@ -99,6 +99,7 @@ LLM 角色既可以使用 Ollama 运行的本地模型，又可以用 API 访问
 5.  **开始录音**：按住 `CapsLock键` 或 `鼠标侧键X2` 就可以说话了！
 
 如果你是直接 clone 源码仓库而不是下载 release，请额外看 [docs/CONFIGURATION.md](docs/CONFIGURATION.md)，里面说明了模型、Fun-ASR 本地 DLL 和 LLM override 的正确配置方式。
+第一次接手这个 fork 的人，可以先看 [docs/QUICKSTART.md](docs/QUICKSTART.md)。
 
 
 ## 🎤 模型说明
