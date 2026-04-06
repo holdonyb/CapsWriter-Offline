@@ -335,7 +335,7 @@ def _build_llm_tab(parent, role_overrides, widgets):
 
     intro = ttk.Label(
         scroll_frame,
-        text='说明：普通听写默认走“默认”角色；只有在语音开头说出“大助理/翻译/格式化”等前缀时，才会切换到对应角色。API URL 必须填写完整的 http(s) 地址，不能填模型名。',
+        text='说明：普通听写默认不走 LLM，直接输出识别结果；只有在语音开头说出“大助理/翻译/格式化/润色”等角色前缀时，才会切换到对应角色。API URL 必须填写完整的 http(s) 地址，不能填模型名。',
         wraplength=640,
         justify='left',
     )
@@ -447,7 +447,7 @@ def _build_ui_tab(parent, overrides, widgets):
     widgets['llm_stop_key'] = stop_var
 
     llm_var = tk.BooleanVar(value=_get_val(overrides, 'llm_enabled'))
-    ttk.Checkbutton(out_frame, text='启用 LLM 润色', variable=llm_var).pack(anchor='w', padx=8, pady=2)
+    ttk.Checkbutton(out_frame, text='启用角色 LLM 功能（仅在说出角色前缀时触发）', variable=llm_var).pack(anchor='w', padx=8, pady=2)
     widgets['llm_enabled'] = llm_var
 
 
